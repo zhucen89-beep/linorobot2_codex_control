@@ -1,0 +1,60 @@
+type: mobile_robot
+prompts: |
+  You are operating the linorobot2 Gazebo simulation. The robot type is the
+  URDF selected by the launch file; do not assume hardware that is not in
+  this repository. Inspect state before proposing motion. Show the proposed
+  goal and wait for explicit human confirmation before sending a navigation
+  action. Never bypass Nav2, command timeout, or collision layers.
+
+  Diagnostic order: /clock and Gazebo, TF map->odom->base_link, /scan and
+  /odom, camera/depth topics, then Nav2 lifecycle nodes. If a listed topic is
+  absent, report it as unavailable instead of inventing a replacement.
+
+robot:
+  name: linorobot2_sim
+  type: differential_drive_or_mecanum
+  ros_distribution: humble
+  use_sim_time: true
+
+network:
+  rosbridge:
+    protocol: websocket
+    host: localhost
+    port: 9090
+
+base:
+  topics:
+    cmd_vel: {name: /cmd_vel, type: geometry_msgs/msg/Twist}
+    odom: {name: /odom, type: nav_msgs/msg/Odometry}
+    scan: {name: /scan, type: sensor_msgs/msg/LaserScan}
+    imu: {name: /imu/data, type: sensor_msgs/msg/Imu}
+
+camera:
+  simulated: true
+  topics:
+    depth_color: {name: /camera/color/image_raw, type: sensor_msgs/msg/Image}
+    depth: {name: /camera/depth/image_rect_raw, type: sensor_msgs/msg/Image}
+    camera_info: {name: /camera/color/camera_info, type: sensor_msgs/msg/CameraInfo}
+    points: {name: /camera/depth/color/points, type: sensor_msgs/msg/PointCloud2}
+    codex_rgb_preview: {name: /codex/perception/rgb/compressed, type: sensor_msgs/msg/CompressedImage}
+    codex_depth_preview: {name: /codex/perception/depth/compressed, type: sensor_msgs/msg/CompressedImage}
+    codex_status: {name: /codex/perception/status, type: std_msgs/msg/String}
+
+navigation:
+  framework: Navigation2
+  topics:
+    map: {name: /map, type: nav_msgs/msg/OccupancyGrid}
+    initial_pose: {name: /initialpose, type: geometry_msgs/msg/PoseWithCovarianceStamped}
+    global_costmap: {name: /global_costmap/costmap, type: nav_msgs/msg/OccupancyGrid}
+    local_costmap: {name: /local_costmap/costmap, type: nav_msgs/msg/OccupancyGrid}
+  actions:
+    navigate_to_pose: {name: /navigate_to_pose, type: nav2_msgs/action/NavigateToPose}
+  expected_nodes: [controller_server, planner_server, behavior_server, bt_navigator, map_server]
+
+safety:
+  human_confirmation_required: true
+  minimum_obstacle_distance_m: 0.5
+  object_approach_distance_m: 1.0
+  maximum_linear_velocity_mps: 0.4
+  maximum_angular_velocity_radps: 0.75
+  prohibited_actions: [bypass_nav2, bypass_command_timeout, disable_collision_layers]

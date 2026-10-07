@@ -20,12 +20,13 @@ if(NOT SCRIPT_RESULT EQUAL 0)
 endif()
 
 install(
-  DIRECTORY launch rviz worlds
+  DIRECTORY launch rviz worlds robot_specifications
   DESTINATION share/${PROJECT_NAME}
 )
 
 install(PROGRAMS
   scripts/command_timeout.py
+  scripts/codex_perception_gateway.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

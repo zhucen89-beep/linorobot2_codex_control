@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, Shutdown
+from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution, EnvironmentVariable, PythonExpression
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.launch_description_sources import AnyLaunchDescriptionSource
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import ComposableNodeContainer
@@ -34,16 +35,25 @@ def generate_launch_description():
         [FindPackageShare("linorobot2_gazebo"), "worlds", "playground.world"]
     )
 
-    robot_base = os.getenv('LINOROBOT2_BASE')
     urdf_path = PathJoinSubstitution(
-        [FindPackageShare("linorobot2_description"), "urdf/robots", f"{robot_base}.urdf.xacro"]
+        [FindPackageShare("linorobot2_description"), "urdf/robots",
+         PythonExpression(["'", LaunchConfiguration('robot_base'), ".urdf.xacro'"]) ]
     )
 
     description_launch_path = PathJoinSubstitution(
         [FindPackageShare('linorobot2_description'), 'launch', 'description.launch.py']
     )
 
+    rosbridge_launch_path = PathJoinSubstitution(
+        [FindPackageShare('rosbridge_server'), 'launch', 'rosbridge_websocket_launch.xml']
+    )
+
     return LaunchDescription([
+        DeclareLaunchArgument(
+            name='robot_base',
+            default_value=EnvironmentVariable('LINOROBOT2_BASE', default_value='4wd'),
+            description='linorobot2 base type: 2wd, 4wd, or mecanum'
+        ),
         DeclareLaunchArgument(
             name='urdf', 
             default_value=urdf_path,
@@ -60,6 +70,12 @@ def generate_launch_description():
             name='world', 
             default_value=world_path,
             description='Gazebo world'
+        ),
+
+        DeclareLaunchArgument(
+            name='gazebo_cmd',
+            default_value=EnvironmentVariable('GAZEBO_CMD', default_value='gazebo'),
+            description='Path or command used to start Gazebo Classic'
         ),
 
         DeclareLaunchArgument(
@@ -86,9 +102,25 @@ def generate_launch_description():
             description='Robot spawn heading'
         ),
 
+        DeclareLaunchArgument(
+            name='rosbridge',
+            default_value='false',
+            description='Start rosbridge WebSocket server for ROS-MCP'
+        ),
+
+        DeclareLaunchArgument(
+            name='rosbridge_port',
+            default_value='9090',
+            description='rosbridge WebSocket port'
+        ),
+
         ExecuteProcess(
-            cmd=['gazebo', '--verbose', '-s', 'libgazebo_ros_factory.so',  '-s', 'libgazebo_ros_init.so', LaunchConfiguration('world')],
-            output='screen'
+            cmd=[LaunchConfiguration('gazebo_cmd'), '--verbose',
+                 '-s', 'libgazebo_ros_factory.so',
+                 '-s', 'libgazebo_ros_init.so',
+                 LaunchConfiguration('world')],
+            output='screen',
+            on_exit=Shutdown(reason='Gazebo 已退出')
         ),
 
         Node(
@@ -130,6 +162,14 @@ def generate_launch_description():
                 'use_sim_time': str(use_sim_time),
                 'publish_joints': 'false',
                 'urdf': LaunchConfiguration('urdf')
+            }.items()
+        ),
+
+        IncludeLaunchDescription(
+            AnyLaunchDescriptionSource(rosbridge_launch_path),
+            condition=IfCondition(LaunchConfiguration('rosbridge')),
+            launch_arguments={
+                'port': LaunchConfiguration('rosbridge_port')
             }.items()
         )
     ])
